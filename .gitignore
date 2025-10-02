@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+# macOS
+.DS_Store
+# Editor
+.vscode/
+.idea/
+# Secrets
+backend/.env
+# Frontend dev
+node_modules/
