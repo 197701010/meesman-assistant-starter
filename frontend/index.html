@@ -2,79 +2,93 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Meesman AI-assistent (demo)</title>
+  <title>Meesman Document Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --bg:#f7f7fb; --panel:#ffffff; --ink:#111827; --muted:#6b7280;
-      --user:#e9ecff; --bot:#eef2ff; --ring:#b4c6ff;
-      --radius:16px;
-    }
-    * { box-sizing:border-box }
-    html,body { height:100% }
-    body {
-      margin:0; font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial;
-      color:var(--ink); background:var(--bg);
-      display:flex; justify-content:center;
-    }
-    .app {
-      width:min(920px,100%); padding:24px;
-    }
-    .header {
-      margin:0 0 8px; font-weight:700; font-size:28px;
-    }
-    .sub { color:var(--muted); margin-bottom:24px }
-    .panel {
-      background:var(--panel); border-radius:20px; padding:16px;
-      box-shadow:0 6px 30px rgba(0,0,0,.06);
-      display:flex; flex-direction:column; gap:12px; height:70vh;
-    }
-    .messages {
-      overflow:auto; display:flex; flex-direction:column; gap:10px; padding:4px 4px 8px;
-      scroll-behavior:smooth;
-    }
-    .row { display:flex; width:100% }
-    .row.user { justify-content:flex-end }
-    .row.assistant { justify-content:flex-start }
-    .bubble {
-      max-width:70%; padding:12px 14px; border-radius:14px; white-space:pre-wrap;
-      word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,.04);
-    }
-    .user .bubble { background:var(--user); border-top-right-radius:6px }
-    .assistant .bubble { background:var(--bot); border-top-left-radius:6px }
-    .typing { color:var(--muted); font-size:14px; padding:4px 2px 0 2px }
-    form {
-      display:flex; gap:8px; margin-top:auto; border:1px solid var(--ring);
-      border-radius:14px; padding:6px; background:#fff;
-    }
-    input[type="text"] {
-      flex:1; border:0; outline:0; font:inherit; padding:10px 12px; border-radius:10px;
-    }
-    button {
-      border:0; background:#3b82f6; color:#fff; padding:10px 14px; border-radius:12px;
-      font-weight:600; cursor:pointer;
-    }
-    button:disabled { opacity:.6; cursor:not-allowed }
-    .foot { color:var(--muted); font-size:12px; margin-top:10px; text-align:center }
-    a { color:#2563eb; text-decoration:none }
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 24px; background:#f7f7f8; color:#111; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    .card { background:#fff; border-radius:16px; padding:20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    h1 { margin:0 0 10px; font-size:22px; }
+    form { display:flex; gap:8px; margin:12px 0 16px; }
+    input { flex:1; padding:12px 14px; border-radius:12px; border:1px solid #ddd; font-size:16px; }
+    button { padding:12px 16px; border:0; border-radius:12px; background:#111; color:#fff; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:wait; }
+    .answer { white-space:pre-wrap; line-height:1.5; }
+    .sources { margin-top:14px; }
+    .chip { display:inline-block; margin:4px 6px 0 0; padding:6px 10px; border-radius:999px; background:#eef2ff; font-size:13px; }
+    .chip a { color:#1f2937; text-decoration:none; }
+    .muted { color:#6b7280; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <h1 class="header">Meesman AI-assistent (demo)</h1>
-    <p class="sub">Stel een vraag. Chatgeschiedenis blijft (optioneel) lokaal in je browser.</p>
-
-    <div class="panel">
-      <div id="messages" class="messages" aria-live="polite"></div>
-
-      <form id="form">
-        <input id="input" type="text" placeholder="Stel je vraag…" autocomplete="off" />
-        <button id="send" type="submit">Sturen</button>
+  <div class="wrap">
+    <div class="card">
+      <h1>Meesman Document Chat</h1>
+      <form id="f">
+        <input id="q" placeholder="Stel je vraag… (bv. ‘Wat staat er in mp-prospectus-2025-07-01.pdf?’)" />
+        <button id="askBtn" type="submit">Vraag</button>
       </form>
-      <div class="foot">Prototype • lokaal: frontend → backend (FastAPI) → Mistral</div>
+      <div id="out" class="answer muted">Nog geen antwoord…</div>
+      <div id="src" class="sources"></div>
     </div>
   </div>
 
-  <script src="./widget.js"></script>
+  <script>
+    const API = "http://127.0.0.1:8000";
+    const f = document.getElementById("f");
+    const q = document.getElementById("q");
+    const out = document.getElementById("out");
+    const src = document.getElementById("src");
+    const btn = document.getElementById("askBtn");
+
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const question = q.value.trim();
+      if (!question) return;
+      btn.disabled = true;
+      out.classList.remove("muted");
+      out.textContent = "Bezig met zoeken in de documenten…";
+      src.innerHTML = "";
+
+      try {
+        const r = await fetch(API + "/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question })
+        });
+        const data = await r.json();
+
+        out.textContent = data.answer || "(Geen antwoord gevonden.)";
+
+        // Toon bronnen met paginalinks
+        const cites = Array.isArray(data.citations) ? data.citations : [];
+        if (cites.length) {
+          const chips = [];
+          for (const c of cites) {
+            const pages = (c.pages || []).slice(0, 4); // toon max 4 pagina's per bron
+            const pp = pages.length ? " p." + pages.join(",") : "";
+            const href = `${API}/files/${encodeURIComponent(c.source)}${pages.length ? "#page=" + pages[0] : ""}`;
+            chips.push(`<span class="chip"><a target="_blank" href="${href}">${c.source}${pp}</a></span>`);
+          }
+          src.innerHTML = `<strong>Bronnen:</strong> ${chips.join(" ")}`;
+        } else if (Array.isArray(data.sources) && data.sources.length) {
+          const chips = data.sources.map(s => {
+            const href = `${API}/files/${encodeURIComponent(s)}`;
+            return `<span class="chip"><a target="_blank" href="${href}">${s}</a></span>`;
+          });
+          src.innerHTML = `<strong>Bronnen:</strong> ${chips.join(" ")}`;
+        } else {
+          src.innerHTML = "";
+        }
+      } catch (e) {
+        out.classList.add("muted");
+        out.textContent = "Er ging iets mis bij het ophalen van het antwoord.";
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
