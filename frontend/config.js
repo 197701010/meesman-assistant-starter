@@ -1,1 +1,1 @@
-window.APP_CONFIG = { BACKEND_BASE: "http://127.0.0.1:8000" };
+window.APP_CONFIG = { BACKEND_BASE: "https://meesman-assistant-starter.onrender.com" };
