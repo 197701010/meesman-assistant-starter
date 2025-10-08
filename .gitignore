@@ -12,4 +12,3 @@ backend/.env
 # Frontend dev
 node_modules/
 backend/.venv/
-backend/corpus/
