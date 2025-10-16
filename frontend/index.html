@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Meesman Document Chat</title>
-  <script src="/frontend/config.js"></script>
   <style>
     :root{--bg:#f7f7f8;--card:#fff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--brand:#111827;--chip:#f3f4f6}
     *{box-sizing:border-box}
@@ -55,7 +54,7 @@
   </div>
 
   <script>
-    const BACKEND_BASE = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_BASE) || "";
+    const BACKEND_BASE = "https://meesman-assistant-starter.onrender.com";
     document.getElementById('bb').textContent = BACKEND_BASE || "(leeg)";
 
     const elAsk = document.getElementById('askBtn');
