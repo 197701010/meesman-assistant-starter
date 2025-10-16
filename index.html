@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Meesman Document Chat</title>
+  <style>
+    :root{--bg:#f7f7f8;--card:#fff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--brand:#111827;--chip:#f3f4f6}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    .wrap{max-width:980px;margin:32px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px}
+    h1{margin:0 0 16px 0;font-size:28px}
+    .row{display:flex;gap:10px}
+    input[type=text]{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:12px}
+    button{padding:12px 16px;border-radius:12px;border:1px solid var(--border);background:var(--brand);color:#fff;cursor:pointer}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:13px}
+    .answer{margin-top:16px;white-space:pre-wrap}
+    .err{margin-top:14px;background:#fef3c7;border:1px solid #fde68a;color:#7c2d12;border-radius:12px;padding:10px}
+    .ok{margin-top:14px;background:#f0fdf4;border:1px solid #bbf7d0;color:#064e3b;border-radius:12px;padding:10px}
+    .sources{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+    .chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid var(--border);border-radius:999px;padding:8px 12px;text-decoration:none;color:var(--text)}
+    .chip:hover{filter:brightness(.97)}
+    .followups{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+    .ghost{background:#fff;color:var(--text)}
+    .foot{margin-top:10px;font-size:12px;color:var(--muted)}
+    .hr{height:1px;background:var(--border);margin:16px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Meesman Document Chat</h1>
+
+      <div class="row">
+        <input id="q" type="text" placeholder="Stel je vraag… (bv. 'Wat was het beheerd vermogen in 2023?')" />
+        <button id="askBtn">Vraag</button>
+      </div>
+
+      <div id="status" class="muted" style="margin-top:8px;"></div>
+
+      <div id="msg"></div>
+      <div id="answer" class="answer"></div>
+
+      <div id="srcTitle" class="muted" style="display:none;margin-top:12px;"><strong>Bronnen:</strong></div>
+      <div id="sources" class="sources"></div>
+
+      <div id="followups" class="followups"></div>
+
+      <div class="hr"></div>
+      <div class="foot">BACKEND_BASE: <code id="bb"></code></div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_BASE = "https://meesman-assistant-starter.onrender.com";
+    document.getElementById('bb').textContent = BACKEND_BASE || "(leeg)";
+
+    const elAsk = document.getElementById('askBtn');
+    const elQ   = document.getElementById('q');
+    const elMsg = document.getElementById('msg');
+    const elAns = document.getElementById('answer');
+    const elSrc = document.getElementById('sources');
+    const elSrcTitle = document.getElementById('srcTitle');
+    const elFus = document.getElementById('followups');
+    const elStatus = document.getElementById('status');
+
+    function setStatus(t){ elStatus.textContent = t || ""; }
+    function showOk(t){ elMsg.className='ok'; elMsg.textContent=t; }
+    function showErr(t){ elMsg.className='err'; elMsg.textContent=t; }
+    function clearUI(){
+      elMsg.className=''; elMsg.textContent='';
+      elAns.textContent=''; elSrc.innerHTML=''; elFus.innerHTML='';
+      elSrcTitle.style.display='none';
+    }
+
+    // Normaliseer citation/sources formats naar klikbare links
+    function normalizeCitations(payload){
+      const out = [];
+      const deriveTitle = (u) => {
+        try{
+          const p = new URL(u, BACKEND_BASE);
+          const file = p.pathname.split('/').pop() || 'bron';
+          const page = (p.hash && p.hash.includes('page=')) ? ' p.' + p.hash.split('page=')[1] : '';
+          return file + page;
+        }catch{ return u; }
+      };
+      const add = (url, title) => {
+        if (!url) return;
+        let abs = url;
+        if (!/^https?:\/\//i.test(url)) {
+          if (url.startsWith('/files/')) abs = BACKEND_BASE + url;
+          else abs = BACKEND_BASE + '/files/' + url;
+        }
+        out.push({ url: abs, title: title || deriveTitle(abs) });
+      };
+
+      if (Array.isArray(payload?.citations)) {
+        payload.citations.forEach(c => {
+          if (typeof c === 'string') add(c);
+          else if (c) {
+            const u = c.url || c.href || c.link || c.path || c.file;
+            let title = c.title || c.name || c.file || c.path;
+            if (c.page) title = (title || 'bron') + ' p.' + c.page;
+            add(u, title);
+          }
+        });
+      }
+      if (Array.isArray(payload?.sources)) {
+        payload.sources.forEach(s => {
+          if (typeof s === 'string') add(s);
+          else if (s) {
+            const u = s.url || s.href || s.link || s.path || s.file;
+            let title = s.title || s.name || s.file || s.path;
+            if (s.page) title = (title || 'bron') + ' p.' + s.page;
+            add(u, title);
+          }
+        });
+      }
+      if (Array.isArray(payload?.bronnen)) payload.bronnen.forEach(s => add(String(s)));
+
+      const seen = new Set(); const uniq = [];
+      for (const it of out){ if (!seen.has(it.url)){ seen.add(it.url); uniq.push(it); } }
+      return uniq;
+    }
+
+    async function ask(question){
+      const body = JSON.stringify({ question });
+      const res = await fetch(BACKEND_BASE + '/ask', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { answer: text }; }
+      if (!res.ok) throw new Error(\`HTTP \${res.status} \${res.statusText} — \${typeof data==='string'?data:JSON.stringify(data)}\`);
+      return data;
+    }
+
+    async function onAsk(){
+      const q = elQ.value.trim();
+      if (!q) { showErr('Typ eerst een vraag.'); return; }
+      clearUI(); setStatus('Zoeken in documenten…'); elAsk.disabled = true;
+
+      try{
+        const data = await ask(q);
+        setStatus('');
+        elAns.textContent = data.answer || '';
+
+        const cites = normalizeCitations(data);
+        if (cites.length){
+          elSrcTitle.style.display='block';
+          cites.forEach(c => {
+            const a = document.createElement('a');
+            a.className = 'chip';
+            a.href = c.url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = c.title || c.url;
+            elSrc.appendChild(a);
+          });
+        }
+
+        if (Array.isArray(data.followups) && data.followups.length){
+          data.followups.forEach(f => {
+            const b = document.createElement('button');
+            b.className = 'chip ghost';
+            b.textContent = f;
+            b.onclick = () => { elQ.value = f; onAsk(); };
+            elFus.appendChild(b);
+          });
+        }
+
+        showOk('Klaar.');
+      }catch(e){
+        setStatus('');
+        showErr(e.message || 'Er ging iets mis.');
+      }finally{
+        elAsk.disabled = false;
+      }
+    }
+
+    elAsk.addEventListener('click', onAsk);
+    elQ.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter') onAsk(); });
+
+    // mini-status check
+    (async function ping(){
+      try{
+        const r = await fetch(BACKEND_BASE + '/status');
+        if (r.ok) setStatus('Backend bereikbaar.');
+      }catch{}
+    })();
+  </script>
+</body>
+</html>
