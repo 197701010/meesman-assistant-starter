@@ -197,7 +197,7 @@ def ask(body: AskIn):
     if len(PAGES) == 0:
         return _refuse()
 
-    hits = _retrieve(q, k=4, min_score=2)
+    hits = _retrieve(q, k=6, min_score=1)
     if not hits:
         return _refuse()
 
